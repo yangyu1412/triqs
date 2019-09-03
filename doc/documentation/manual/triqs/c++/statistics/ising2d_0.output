@@ -1,0 +1,15 @@
+2D Ising with field = 0, beta = 0.5, N = 20
+
+Warming up ...
+10:37:20   7% ETA 00:00:01 cycle 7523 of 100000
+
+
+
+Accumulating ...
+10:37:21  11% ETA 00:00:00 cycle 11313 of 100000
+
+
+@Beta:	0.5	Magnetization:	-0.909722
+average_and_error(M) = -363.889 +/- 0.0553269
+#Beta:	0.5	Autocorr_time:	29.8271
+Total number of measures: 100000

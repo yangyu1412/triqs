@@ -1,0 +1,10 @@
+A = 
+[[0,-1]
+ [1,0]]
+abs(A)= 
+[[0,1]
+ [1,0]]
+sum(A) = 0
+max_element(A) = 1
+min_element(A) = -1
+min_element(abs(A)) = 0

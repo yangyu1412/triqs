@@ -1,0 +1,22 @@
+
+After construction, D.matrix()=
+[[-6.28172,-13.2817,-78.2817]
+ [-1.61094,-8.61094,-73.6109]
+ [3.18249,-3.81751,-68.8175]]
+
+We want to change a row and a column.
+After change_one_row_and_one_col(0,1, 2.1, 1.2), D.matrix()=
+[[-0.83383,6.72617,-72.8338]
+ [-1.61094,5.94906,-73.6109]
+ [3.18249,10.7425,-68.8175]]
+
+
+After construction, D2.matrix()=
+[[-8.61094,-73.6109]
+ [-3.81751,-68.8175]]
+
+We want to change a row and a column.
+After change_one_row_and_one_col(0,1, 2.1, 1.2), D2.matrix()=
+[[-7.83383,6.72617]
+ [-3.81751,10.7425]]
+

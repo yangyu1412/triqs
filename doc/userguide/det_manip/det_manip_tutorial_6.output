@@ -1,0 +1,14 @@
+
+After construction, D.matrix()=
+[[-6.28172,-13.2817,-78.2817]
+ [-1.61094,-8.61094,-73.6109]
+ [3.18249,-3.81751,-68.8175]]
+
+We want to remove 2 lines and 2 columns for i0=2, j0=0, i1=1, j1=1.
+After try_remove2, D.matrix()=
+[[-6.28172,-13.2817,-78.2817]
+ [-1.61094,-8.61094,-73.6109]
+ [3.18249,-3.81751,-68.8175]]
+After complete_operation, D.matrix()=
+[[-78.2817]]
+

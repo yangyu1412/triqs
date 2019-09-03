@@ -1,0 +1,15 @@
+
+D.matrix()=
+[[-2,-3]
+ [-1,-2]]
+
+The size of the matrix is 2
+
+The determinant is 1
+
+The inverse matrix is
+[[-2,3]
+ [1,-2]]
+
+The value of the parameters for coefficient (i,j)=(0,1) is (x,y)=(1,4)
+

@@ -1,0 +1,52 @@
+Invariant subspace 0
+====================
+State    N_up   N_dn
+====================
+|0000>   0      0
+Invariant subspace 1
+====================
+State    N_up   N_dn
+====================
+|0001>   1      0
+|0100>   1      0
+Invariant subspace 2
+====================
+State    N_up   N_dn
+====================
+|0010>   0      1
+|1000>   0      1
+Invariant subspace 3
+====================
+State    N_up   N_dn
+====================
+|0011>   1      1
+|0110>   1      1
+|1001>   1      1
+|1100>   1      1
+Invariant subspace 4
+====================
+State    N_up   N_dn
+====================
+|0101>   2      0
+Invariant subspace 5
+====================
+State    N_up   N_dn
+====================
+|0111>   2      1
+|1101>   2      1
+Invariant subspace 6
+====================
+State    N_up   N_dn
+====================
+|1010>   0      2
+Invariant subspace 7
+====================
+State    N_up   N_dn
+====================
+|1011>   1      2
+|1110>   1      2
+Invariant subspace 8
+====================
+State    N_up   N_dn
+====================
+|1111>   2      2

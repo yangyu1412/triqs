@@ -1,0 +1,16 @@
+caught error 
+.. Triqs runtime error at /mnt/home/wentzell/Dropbox/Coding/triqs/doc/documentation/manual/triqs/utilities/exceptions_1.cpp : 7
+
+ The condition is false because 2!=3
+.. Error occurred on node .. C++ trace is : 
+#7  0x0000000000403427 in f() ()
+#8  0x0000000000403686 in main ()
+[Inferior 1 (process 2103982) detached]
+
+
+C++ trace = 
+
+#7  0x0000000000403427 in f() ()
+#8  0x0000000000403686 in main ()
+[Inferior 1 (process 2103982) detached]
+

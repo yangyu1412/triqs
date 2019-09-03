@@ -1,0 +1,9 @@
+triqs::arrays key_error at /mnt/home/wentzell/Dropbox/Coding/triqs/triqs/arrays/indexmaps/cuboid/./domain.hpp : 116
+
+ Trace is :
+
+
+
+ key out of domain 
+key [1] = 3 is not within [0,2[
+
