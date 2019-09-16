@@ -60,6 +60,7 @@ for (int i = 0; i < osxPlatforms.size(); i++) {
           "CMAKE_PREFIX_PATH=$installDir/lib/cmake/triqs"]) {
         deleteDir()
         sh """#!/bin/bash -ex
+	  env
           virtualenv $installDir
           # install numpy first to deps (h5py) find it
           pip install numpy
