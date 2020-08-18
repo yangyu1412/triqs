@@ -11,7 +11,7 @@
 #include <triqs/utility/callbacks.hpp>
 #include <triqs/arrays.hpp>
 #include <triqs/mc_tools/mc_generic.hpp>
-namespace h5  = triqs::h5;
+namespace h5 = triqs::h5;
 triqs::arrays::array<std::complex<double>, 1> make_array(std::complex<double> c) { return {c}; };
 
 struct configuration {
@@ -19,16 +19,23 @@ struct configuration {
   configuration() : x(0) {} //constructor
 };
 
+long node_that_will_raise_exception = 1;
+
 //------------------------------------------------------------
 // MOVES
 //------------------------------------------------------------
 struct move_left {
   configuration *config;
-  double proba = -9;
+  double proba               = -9;
+  inline static long counter = 0;
+  mpi::communicator c; // for error test only
   triqs::mc_tools::random_generator &RND;
   move_left(configuration &config_, double pl, double pr, triqs::mc_tools::random_generator &RND_)
      : config(&config_), proba(pr / pl), RND(RND_) {} //constructor
-  double attempt() { return proba; }
+  double attempt() {
+    if ((c.rank() == node_that_will_raise_exception) and counter++ == 2000) TRIQS_RUNTIME_ERROR << "A bad ERROR";
+    return proba;
+  }
   double accept() {
     config->x += -1;
     return 1;
@@ -97,13 +104,14 @@ int main(int argc, char *argv[]) {
   int xmax                = floor(4 * sqrt(Length_Cycle)); // typical length of a walk
   double pl = 2.5, pr = 1;                                 //non normalized probabilities for proposing a left or right move
 
-  h5::file file("params.h5", H5F_ACC_TRUNC);
-  h5_write(file, "pr", pr);
-  h5_write(file, "pl", pl);
-  h5_write(file, "xmax", xmax);
-  h5_write(file, "N_Cycles", N_Cycles);
-  h5_write(file, "Length_Cycle", Length_Cycle);
-
+  if (world.rank() == 0) {
+    h5::file file("params.h5", H5F_ACC_TRUNC);
+    h5_write(file, "pr", pr);
+    h5_write(file, "pl", pl);
+    h5_write(file, "xmax", xmax);
+    h5_write(file, "N_Cycles", N_Cycles);
+    h5_write(file, "Length_Cycle", Length_Cycle);
+  }
   // construct a Monte Carlo loop
   triqs::mc_tools::mc_generic<double> IntMC(Random_Name, Random_Seed, Verbosity);
 
@@ -121,6 +129,6 @@ int main(int argc, char *argv[]) {
   IntMC.warmup_and_accumulate(N_Warmup_Cycles, N_Cycles, Length_Cycle, triqs::utility::clock_callback(600));
   IntMC.collect_results(world);
 
-  h5_write(file, "Stats", IntMC.get_acceptance_rates());
+  ///h5_write(file, "Stats", IntMC.get_acceptance_rates());
   //std::cout  << IntMC.average_sign() << std::endl;
 }

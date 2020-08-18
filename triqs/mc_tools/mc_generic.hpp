@@ -220,29 +220,44 @@ namespace triqs::mc_tools {
       bool stop_it = false, finished = false;
       int NC                = 0;
       double next_info_time = 0.1;
+      long aborted          = 0;
+      long signal_caught    = 0;
+      mpi::communicator world; // not great, but it is just a temporary patch. the 3.x branch has the proper solution, passing the comm.
+
       for (; !stop_it; ++NC) { // do NOT reinit NC to 0
-        // Metropolis loop. Switch here for HeatBath, etc...
-        for (uint64_t k = 1; (k <= length_cycle); k++) {
-          if (triqs::signal_handler::received()) goto _final;
-          double r = AllMoves.attempt();
-          if (RandomGenerator() < std::min(1.0, r)) {
-            if (debug) std::cerr << " Move accepted " << std::endl;
-            sign *= AllMoves.accept();
-            if (debug) std::cerr << " New sign = " << sign << std::endl;
-          } else {
-            if (debug) std::cerr << " Move rejected " << std::endl;
-            AllMoves.reject();
+        try {
+          // Metropolis loop. Switch here for HeatBath, etc...
+          for (uint64_t k = 1; (k <= length_cycle); k++) {
+            if (triqs::signal_handler::received()) throw triqs::signal_handler::exception{};
+            double r = AllMoves.attempt();
+            if (RandomGenerator() < std::min(1.0, r)) {
+              if (debug) std::cerr << " Move accepted " << std::endl;
+              sign *= AllMoves.accept();
+              if (debug) std::cerr << " New sign = " << sign << std::endl;
+            } else {
+              if (debug) std::cerr << " Move rejected " << std::endl;
+              AllMoves.reject();
+            }
+            ++config_id;
           }
-          ++config_id;
+          if (after_cycle_duty) { after_cycle_duty(); }
+          if (do_measure) {
+            nmeasures++;
+            for (auto &x : AllMeasuresAux) x();
+            AllMeasures.accumulate(sign);
+          }
+        } catch (triqs::signal_handler::exception const &) {
+          std::cerr << "mc_generic: Signal caught on node " << world.rank() << "\n" << std::endl;
+          signal_caught = 1;
+          // do nothing, let's continue
+        } catch (std::exception const &err) {
+          // log the error and node number
+          std::cerr << "mc_generic: Exception occurs on node " << world.rank() << "\n" << err.what() << std::endl;
+          aborted = 1;
+          world.abort(2);
         }
-        if (after_cycle_duty) { after_cycle_duty(); }
-        if (do_measure) {
-          nmeasures++;
-          for (auto &x : AllMeasuresAux) x();
-          AllMeasures.accumulate(sign);
-        }
-      // recompute fraction done
-      _final:
+
+        // recompute fraction done
         done_percent = uint64_t(floor((NC * 100.0) / (n_cycles - 1)));
         if (timer > next_info_time) {
           report << utility::timestamp() << " " << std::setfill(' ') << std::setw(3) << done_percent << "%"
@@ -252,6 +267,8 @@ namespace triqs::mc_tools {
         }
         finished = NC + 1 >= n_cycles;
         stop_it  = (stop_callback() || triqs::signal_handler::received() || finished);
+        stop_it |= signal_caught;
+        stop_it |= aborted;
       }
       int status = (finished ? 0 : (triqs::signal_handler::received() ? 2 : 1));
       triqs::signal_handler::stop();
