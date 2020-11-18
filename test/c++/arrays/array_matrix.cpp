@@ -16,6 +16,7 @@
 // Authors: Olivier Parcollet, Nils Wentzell
 
 #include "./array_test_common.hpp"
+#include <triqs/gfs.hpp>
 
 /// Matrix specific tests
 
@@ -85,4 +86,25 @@ TEST(Matrix, TransposeDagger) {
       EXPECT_COMPLEX_NEAR(bt(i, j), B(j, i));
     }
 }
+
+// ===============================================================
+
+TEST(Matrix, TransposeProxy) {
+
+  using namespace triqs::gfs;
+  using namespace triqs::clef;
+
+  auto m     = gf_mesh<retime>{0, 10, 99};
+  auto Ginv  = gf<retime>{m, {2, 2}};
+
+  placeholder<0> w;
+  placeholder<1> i;
+  placeholder<2> j;
+
+  Ginv[w](i, j) << w - (i + j) + 0.001i;
+
+  EXPECT_EQ(Ginv[{0}], transpose(Ginv[{0}]));
+  EXPECT_EQ(Ginv[{10}], transpose(Ginv[{10}]));
+}
+
 MAKE_MAIN
