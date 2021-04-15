@@ -57,7 +57,7 @@ namespace triqs::stat {
         bins.emplace_back(std::move(data_instance_local));
       }
 
-      long n_bins() const { return bins.size(); }
+      long n_bins() const { return (last_bin_count == 0) ? 0 : bins.size(); }
 
       template <typename U> lin_binning<T> &operator<<(U &&x) {
         if (max_n_bins == 0) return *this;
