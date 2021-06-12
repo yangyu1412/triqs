@@ -32,7 +32,7 @@
 #include <sstream>
 #include <gtest/gtest.h>
 #include <nda/gtest_tools.hpp>
-#include <nda/clef/adapters/math.hpp>
+#include <nda/clef/adapters/math.hxx>
 
 #if H5_VERSION_GE(1, 8, 9)
 #include <h5/serialization.hpp>

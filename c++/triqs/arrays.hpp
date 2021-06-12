@@ -32,7 +32,7 @@
 #include <nda/blas.hpp>
 #include <nda/lapack.hpp>
 #include <nda/linalg/det_and_inverse.hpp>
-#include <nda/clef/adapters/math.hpp>
+#include <nda/clef/adapters/math.hxx>
 #include <nda/clef/sum.hpp>
 
 #include "utility/concept_tools.hpp"

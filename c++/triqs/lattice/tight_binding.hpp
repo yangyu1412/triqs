@@ -62,7 +62,7 @@ namespace triqs {
 
         TRIQS_CLEF_IMPLEMENT_LAZY_CALL();
 
-        template <typename K> std::enable_if_t<!clef::is_clef_expression<K>, matrix<dcomplex>> operator()(K const &k) const {
+        template <typename K>  matrix<dcomplex> operator()(K const &k) const requires(!nda::clef::Lazy<K>) {
           matrix<dcomplex> res(nb, nb);
           res() = 0;
           foreach (tb, [&](std::vector<long> const &displ, matrix<dcomplex> const &m) {

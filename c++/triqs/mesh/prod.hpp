@@ -80,7 +80,7 @@ namespace triqs::mesh {
     prod() = default;
     prod(Ms const &... mesh) : m_tuple(mesh...), _dom(mesh.domain()...) {}
     prod(std::tuple<Ms...> const &mesh_tpl) : m_tuple(mesh_tpl), _dom(triqs::tuple::map([](auto &&m) { return m.domain(); }, mesh_tpl)) {}
-    template<typename... U>
+    template <typename... U>
     prod(std::tuple<U...> const &mesh_tpl) : m_tuple(mesh_tpl), _dom(triqs::tuple::map([](auto &&m) { return m.domain(); }, mesh_tpl)) {}
     prod(prod const &) = default;
 
@@ -105,27 +105,27 @@ namespace triqs::mesh {
       return res;
     }
 
-      /// Is the point of evaluation in the mesh. All components must be in the corresponding mesh.
-      template <typename... Args> bool is_within_boundary(Args const &... args) const {
-        return triqs::tuple::fold([](auto &m, auto &arg, bool r) { return r && (m.is_within_boundary(arg)); }, m_tuple, std::tie(args...), true);
-      }
-      template <typename... Args> bool is_within_boundary(index_t const &idx) const {
-        return triqs::tuple::fold([](auto &m, auto &arg, bool r) { return r && (m.is_within_boundary(arg)); }, m_tuple, idx._i, true);
-      }
+    /// Is the point of evaluation in the mesh. All components must be in the corresponding mesh.
+    template <typename... Args> bool is_within_boundary(Args const &... args) const {
+      return triqs::tuple::fold([](auto &m, auto &arg, bool r) { return r && (m.is_within_boundary(arg)); }, m_tuple, std::tie(args...), true);
+    }
+    template <typename... Args> bool is_within_boundary(index_t const &idx) const {
+      return triqs::tuple::fold([](auto &m, auto &arg, bool r) { return r && (m.is_within_boundary(arg)); }, m_tuple, idx._i, true);
+    }
 
-      /// Conversions point <-> index <-> linear_index
-      typename domain_t::point_t index_to_point(index_t const &idx) const {
-        EXPECTS(is_within_boundary(idx));
-        auto l = [](auto const &m, auto const &i) { return m.index_to_point(i); };
-        return triqs::tuple::map_on_zip(l, m_tuple, idx._i);
-      }
+    /// Conversions point <-> index <-> linear_index
+    typename domain_t::point_t index_to_point(index_t const &idx) const {
+      EXPECTS(is_within_boundary(idx));
+      auto l = [](auto const &m, auto const &i) { return m.index_to_point(i); };
+      return triqs::tuple::map_on_zip(l, m_tuple, idx._i);
+    }
 
-      /// The linear_index is the tuple of the linear_index of the components
-      linear_index_t index_to_linear(index_t const &idx) const {
-        EXPECTS(is_within_boundary(idx));
-        auto l = [](auto const &m, auto const &i) { return m.index_to_linear(i); };
-        return triqs::tuple::map_on_zip(l, m_tuple, idx._i);
-      }
+    /// The linear_index is the tuple of the linear_index of the components
+    linear_index_t index_to_linear(index_t const &idx) const {
+      EXPECTS(is_within_boundary(idx));
+      auto l = [](auto const &m, auto const &i) { return m.index_to_linear(i); };
+      return triqs::tuple::map_on_zip(l, m_tuple, idx._i);
+    }
 
     // -------------------- Accessors (other) -------------------
 
@@ -178,6 +178,9 @@ namespace triqs::mesh {
       write_hdf5_format(gr, m);
       auto l = [gr](int N, auto const &m) { h5_write(gr, "MeshComponent" + std::to_string(N), m); };
       triqs::tuple::for_each_enumerate(m.components(), l);
+      //[&m, &gr]<auto ... Is> (std::index_sequence<Is...>) { 
+             //(h5_write(gr, "MeshComponent" + std::to_string(Is), std::get<Is>(m)), ...);
+      //}(std::make_index_sequence<prod::dim>{});
     }
 
     /// Read from HDF5
@@ -201,7 +204,10 @@ namespace triqs::mesh {
     friend std::ostream &operator<<(std::ostream &sout, prod const &prod_mesh) {
       sout << "Product Mesh";
       triqs::tuple::for_each(prod_mesh.m_tuple, [&sout](auto &m) { sout << "\n  -- " << m; });
-      return sout;
+    //[ &m, &gr]<auto ... Is> (std::index_sequence<Is...>) { 
+             //((void)(sout << "\n  -- " << std::get<Is>(m)), ...);
+      //}(std::make_index_sequence<prod::dim>{});
+     return sout;
     }
 
     // ------------------------------------------------
@@ -211,9 +217,10 @@ namespace triqs::mesh {
   }; //end of class
 
   // ---------- Class template argument deduction rules (CTAD) -------------
-  template <typename M1, typename M2, typename... Ms> prod(M1, M2, Ms...)->prod<M1, M2, Ms...>;
+  template <typename M1, typename M2, typename... Ms> prod(M1, M2, Ms...) -> prod<M1, M2, Ms...>;
 
-  template <typename M1, typename M2, typename... Ms> prod(std::tuple<M1, M2, Ms...>)->prod<std::decay_t<M1>, std::decay_t<M2>, std::decay_t<Ms>...>;
+  template <typename M1, typename M2, typename... Ms>
+  prod(std::tuple<M1, M2, Ms...>) -> prod<std::decay_t<M1>, std::decay_t<M2>, std::decay_t<Ms>...>;
 
   // ------------------------------------------------
   /// The wrapper for the mesh point

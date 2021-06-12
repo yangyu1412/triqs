@@ -19,47 +19,31 @@
 
 #pragma once
 
-namespace triqs {
-  namespace gfs {
-    /*------------------------------------------------------------------------------------------------------
+namespace triqs::gfs {
+  /*------------------------------------------------------------------------------------------------------
   *             Interaction with the CLEF library : auto assignment implementation
   *-----------------------------------------------------------------------------------------------------*/
 
-    // auto assignment of the gf (gf(om_) << expression fills the functions by evaluation of expression)
-   
-    template <typename G, typename RHS> FORCEINLINE void triqs_gf_clef_auto_assign_impl_aux_assign(G &&g, RHS &&rhs) {
-      std::forward<G>(g) = std::forward<RHS>(rhs);
-    }
+  // cf nda::basic_function for the nda::array clef_auto_assign
 
-    template <typename G, typename Expr, int... Is>
-    FORCEINLINE void triqs_gf_clef_auto_assign_impl_aux_assign(G &&g, clef::make_fun_impl<Expr, Is...> &&rhs) {
-      clef_auto_assign(std::forward<G>(g), std::forward<clef::make_fun_impl<Expr, Is...>>(rhs));
-    }
+  template <GfContainer G, typename RHS, clef::CallOrSubscriptTag Tag, typename PhList, typename... OtherTagAndPhList>
+  void clef_auto_assign(G &g, RHS &&rhs, Tag, PhList phl, OtherTagAndPhList... rest) {
 
+    auto f = nda::clef::make_function(std::forward<RHS>(rhs), phl);
+    static_assert(PhList::size == G::arity, "Incorrect number of argument in lazy call");
 
-    template <typename RHS, typename M, typename T, typename L, typename E> FORCEINLINE void clef_auto_assign(gf_view<M, T, L, E> g, RHS const &rhs) {
-      if constexpr (mesh::is_product_v<M>) {
-        for (auto const &w : g.mesh()) { triqs_gf_clef_auto_assign_impl_aux_assign(g[w], triqs::tuple::apply(rhs, w.components_tuple())); }
+    for (auto const &w : g.mesh()) {
+      if constexpr (sizeof...(OtherTagAndPhList) > 0) {
+        if constexpr (mesh::is_product_v<typename G::mesh_t>)
+          clef_auto_assign(g[w], std::apply(f, w.components_tuple()), rest...);
+        else
+          clef_auto_assign(g[w], f(w), rest...);
       } else {
-        for (auto const &w : g.mesh()) { triqs_gf_clef_auto_assign_impl_aux_assign(g[w], rhs(w)); }
+        if constexpr (mesh::is_product_v<typename G::mesh_t>)
+          g[w] = std::apply(f, w.components_tuple());
+        else
+          g[w] = f(w);
       }
     }
-
-    template <typename RHS, typename M, typename T, typename L, typename E> FORCEINLINE void clef_auto_assign(gf<M, T, L, E> &g, RHS const &rhs) {
-      clef_auto_assign(g(), rhs);
-    }
-
-    // enable the writing g[om_] << .... also
-    template <typename RHS, typename M, typename T, typename L, typename E>
-    FORCEINLINE void clef_auto_assign_subscript(gf_view<M, T, L, E> g, RHS const &rhs) {
-      clef_auto_assign(g, rhs);
-    }
-
-    template <typename RHS, typename M, typename T, typename L, typename E>
-    FORCEINLINE void clef_auto_assign_subscript(gf<M, T, L, E> &g, RHS const &rhs) {
-      clef_auto_assign(g, rhs);
-    }
-
- 
-  } // namespace gfs
-} // namespace triqs
+  }
+} // namespace triqs::gfs

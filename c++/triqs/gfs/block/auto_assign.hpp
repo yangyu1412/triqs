@@ -19,56 +19,36 @@
 
 #pragma once
 
-namespace triqs {
-  namespace gfs {
+namespace triqs::gfs {
 
-    /*------------------------------------------------------------------------------------------------------
+  /*------------------------------------------------------------------------------------------------------
   *             Interaction with the CLEF library : auto assignment implementation
   *-----------------------------------------------------------------------------------------------------*/
 
-    // auto assignment of the gf (gf(om_) << expression fills the functions by evaluation of expression)
+  // cf nda::basic_function for the nda::array clef_auto_assign
+  // we ignore the Tag: accept () and []
+  template <GfBlockContainer G, clef::Lazy RHS, clef::CallOrSubscriptTag Tag, typename PhList, typename... OtherTagAndPhList>
+  void clef_auto_assign(G &g, RHS &&rhs, Tag, PhList phl, OtherTagAndPhList... rest) {
 
-    template <typename RHS, typename M, typename T> void clef_auto_assign(block_gf_view<M, T> g, RHS const &rhs) {
-      for (int i = 0; i < g.size(); ++i) triqs_bgf_clef_auto_assign_impl_aux_assign(g[i], rhs(i));
-    }
+    static_assert(PhList::size == G::arity, "Incorrect number of argument in lazy call");
 
-    template <typename RHS, typename M, typename T> void clef_auto_assign(block2_gf_view<M, T> g, RHS const &rhs) {
+    auto f = nda::clef::make_function(std::forward<RHS>(rhs), phl);
+
+    if constexpr (G::arity == 1) {
+      for (int i = 0; i < g.size(); ++i) {
+        if constexpr (sizeof...(OtherTagAndPhList) > 0)
+          clef_auto_assign(g[i], f(i), rest...);
+        else
+          g[i] = f(i);
+      }
+    } else {
       for (int i = 0; i < g.size1(); ++i)
-        for (int j = 0; j < g.size2(); ++j) triqs_bgf_clef_auto_assign_impl_aux_assign(g(i, j), rhs(i, j));
+        for (int j = 0; j < g.size2(); ++j) {
+          if constexpr (sizeof...(OtherTagAndPhList) > 0)
+            clef_auto_assign(g(i, j), f(i,j), rest...);
+          else
+            g(i, j) = f(i,j);
+        }
     }
-
-    template <typename RHS, typename M, typename T> void clef_auto_assign(block_gf<M, T> &g, RHS const &rhs) {
-      clef_auto_assign(g(), rhs);
-    }
-
-    template <typename RHS, typename M, typename T> void clef_auto_assign(block2_gf<M, T> &g, RHS const &rhs) {
-      clef_auto_assign(g(), rhs);
-    }
-
-    // enable the writing g[om_] << .... also
-    template <typename RHS, typename M, typename T> void clef_auto_assign_subscript(block_gf_view<M, T> g, RHS const &rhs) {
-      clef_auto_assign(g, rhs);
-    }
-
-    template <typename RHS, typename M, typename T> void clef_auto_assign_subscript(block_gf<M, T> &g, RHS const &rhs) {
-      clef_auto_assign(g(), rhs);
-    }
-
-    template <typename G, typename RHS> void triqs_bgf_clef_auto_assign_impl_aux_assign(G &&g, RHS &&rhs) {
-      std::forward<G>(g) = std::forward<RHS>(rhs);
-    }
-
-    template <typename G, typename Expr, int... Is> void triqs_bgf_clef_auto_assign_impl_aux_assign(G &&g, clef::make_fun_impl<Expr, Is...> &&rhs) {
-      clef_auto_assign(std::forward<G>(g), std::forward<clef::make_fun_impl<Expr, Is...>>(rhs));
-    }
-
-    /*
- template <typename G, typename RHS> void clef_auto_assign_impl_b(G &g, RHS const &rhs, std::true_type) {
-  for (int i = 0; i < g.size(); ++i) {
-   triqs_bgf_clef_auto_assign_impl_aux_assign(g[i], triqs::tuple::apply(rhs, w.components_tuple()));
   }
- }
-*/
-
-  } // namespace gfs
-} // namespace triqs
+} // namespace triqs::gfs

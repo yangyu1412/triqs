@@ -24,7 +24,7 @@ template <typename... Args> decltype(auto) operator()(Args &&... args) const & {
     return const_view_type{*this};
   else {
     static_assert((sizeof...(Args) == evaluator_t::arity) or (evaluator_t::arity == -1), "Incorrect number of arguments");
-    if constexpr ((... or clef::is_any_lazy<Args>)) // any argument is lazy ?
+    if constexpr ((... or clef::Lazy<Args>)) // any argument is lazy ?
       return clef::make_expr_call(*this, std::forward<Args>(args)...);
     else
       return evaluator_t()(*this, std::forward<Args>(args)...);
@@ -35,7 +35,7 @@ template <typename... Args> decltype(auto) operator()(Args &&... args) & {
     return view_type{*this};
   else {
     static_assert((sizeof...(Args) == evaluator_t::arity) or (evaluator_t::arity == -1), "Incorrect number of arguments");
-    if constexpr ((... or clef::is_any_lazy<Args>)) // any argument is lazy ?
+    if constexpr ((... or clef::Lazy<Args>)) // any argument is lazy ?
       return clef::make_expr_call(*this, std::forward<Args>(args)...);
     else
       return evaluator_t()(*this, std::forward<Args>(args)...);
@@ -46,7 +46,7 @@ template <typename... Args> decltype(auto) operator()(Args &&... args) && {
     return view_type{std::move(*this)};
   else {
     static_assert((sizeof...(Args) == evaluator_t::arity) or (evaluator_t::arity == -1), "Incorrect number of arguments");
-    if constexpr ((... or clef::is_any_lazy<Args>)) // any argument is lazy ?
+    if constexpr ((... or clef::Lazy<Args>)) // any argument is lazy ?
       return clef::make_expr_call(std::move(*this), std::forward<Args>(args)...);
     else
       return evaluator_t()(std::move(*this), std::forward<Args>(args)...);
@@ -68,24 +68,23 @@ template <typename Self> FORCEINLINE static decltype(auto) call_data(Self &&self
   return data_t::template call<(target_t::is_matrix ? 'M' : 'A'), false>(std::forward<Self>(self)._data, i, ellipsis{});
 }
 
-template <typename Self, auto... Is, typename Tu>
-FORCEINLINE static decltype(auto) call_data_impl(Self &&self, std::index_sequence<Is...>, Tu const &tu) noexcept(has_no_boundcheck) {
-  return data_t::template call<(target_t::is_matrix ? 'M' : 'A'), false>(std::forward<Self>(self)._data, std::get<Is>(tu)..., ellipsis{});
-}
-
 template <typename Self, typename... T>
 FORCEINLINE static decltype(auto) call_data(Self &&self, std::tuple<T...> const &tu) noexcept(has_no_boundcheck) {
-  return call_data_impl(std::forward<Self>(self), std::make_index_sequence<sizeof...(T)>{}, tu);
+  return [&]<auto... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+    return data_t::template call<(target_t::is_matrix ? 'M' : 'A'), false>(std::forward<Self>(self)._data, std::get<Is>(tu)..., ellipsis{});
+  }
+  (std::make_index_sequence<sizeof...(T)>{});
 }
 
 public:
-// pass a index_t of the mesh
+
 decltype(auto) operator[](mesh_index_t const &arg) {
   EXPECTS(_mesh.is_within_boundary(arg));
   return call_data(*this, _mesh.index_to_linear(arg));
 }
 
-decltype(auto) operator[](mesh_index_t const &arg) const {
+// same code for const call
+decltype(auto) operator[](mesh_index_t const &arg) const{
   EXPECTS(_mesh.is_within_boundary(arg));
   return call_data(*this, _mesh.index_to_linear(arg));
 }
@@ -117,54 +116,52 @@ template <typename... U> decltype(auto) operator[](closest_pt_wrap<U...> const &
   return call_data(*this, _mesh.index_to_linear(cp_worker::invoke(_mesh, p)));
 }
 
-// -------------- operator [] with tuple_com. Distinguich the lazy and non lazy case
+// -------------- operator [] with nda::clef::comma_tuple.
 public:
-template <typename... U> decltype(auto) operator[](tuple_com<U...> const &tu) & {
+// split lazy case from the rest. Use next [] ?? but no arity check !??
+//https://godbolt.org/z/vT9fYEcbs
+// trait is_argument_compatible_with _/Mesn
+// one concept ---> it EXPLAINS the error
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) & {
   static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::is_any_lazy<U>)) // any argument is lazy ?
+  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
+    return clef::make_expr_subscript(*this, tu);
+  else {
+    static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
+    // in clear, splat the tuple
+    // return details::slice_or_access_general(*this, tu...);
+    auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
+    return std::apply(l, tu._t);
+  }
+}
+
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) const & {
+  static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
+  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
     return clef::make_expr_subscript(*this, tu);
   else {
     static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
     auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return triqs::tuple::apply(l, tu._t);
+    return std::apply(l, tu._t);
   }
 }
 
-template <typename... U> decltype(auto) operator[](tuple_com<U...> const &tu) const & {
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) && {
   static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::is_any_lazy<U>)) // any argument is lazy ?
-    return clef::make_expr_subscript(*this, tu);
-  else {
-    static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
-    auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return triqs::tuple::apply(l, tu._t);
-  }
-}
-
-template <typename... U> decltype(auto) operator[](tuple_com<U...> const &tu) && {
-  static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::is_any_lazy<U>)) // any argument is lazy ?
+  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
     return clef::make_expr_subscript(std::move(*this), tu);
   else {
     static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
     auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return triqs::tuple::apply(l, tu._t);
+    return std::apply(l, tu._t);
   }
 }
 
 // ------------- [] with lazy arguments -----------------------------
 
-template <typename Arg> auto operator[](Arg &&arg) const &requires(clef::is_any_lazy<Arg>) {
-  return clef::make_expr_subscript(*this, std::forward<Arg>(arg));
-}
-
-template <typename Arg> auto operator[](Arg &&arg) & requires(clef::is_any_lazy<Arg>) {
-  return clef::make_expr_subscript(*this, std::forward<Arg>(arg));
-}
-
-template <typename Arg> auto operator[](Arg &&arg) && requires(clef::is_any_lazy<Arg>) {
-  return clef::make_expr_subscript(std::move(*this), std::forward<Arg>(arg));
-}
+template <clef::Lazy Arg> auto operator[](Arg &&arg) const & { return clef::make_expr_subscript(*this, std::forward<Arg>(arg)); }
+template <clef::Lazy Arg> auto operator[](Arg &&arg) & { return clef::make_expr_subscript(*this, std::forward<Arg>(arg)); }
+template <clef::Lazy Arg> auto operator[](Arg &&arg) && { return clef::make_expr_subscript(std::move(*this), std::forward<Arg>(arg)); }
 
 // --------------------- A direct access to the grid point --------------------------
 
@@ -251,7 +248,7 @@ friend void mpi_broadcast(this_t &g, mpi::communicator c = {}, int root = 0) {
 
 // mako ${mpidoc("Reduce")}
 friend mpi::lazy<mpi::tag::reduce, const_view_type> mpi_reduce(this_t const &a, mpi::communicator c = {}, int root = 0, bool all = false,
-                                                              MPI_Op op = MPI_SUM) {
+                                                               MPI_Op op = MPI_SUM) {
   return {a(), c, root, all, op};
 }
 

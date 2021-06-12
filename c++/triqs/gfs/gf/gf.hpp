@@ -49,7 +49,6 @@ namespace triqs::gfs {
   template <template <typename...> class gf, typename T>
   inline constexpr bool is_instantiation_of_v = is_instantiation_of<gf, std::decay_t<T>>::value;
 
-  //template <typename G> using mesh_t_of = std::decay_t<decltype(std::declval<G>().mesh())>;
 
   // is_gf<G> Check if G fullfills the Green function concecpt
   template <typename G, typename M = void> inline constexpr bool is_gf_v = false;
@@ -59,6 +58,9 @@ namespace triqs::gfs {
   template <typename G> inline constexpr bool is_gf_v<G, typename std::decay_t<G>::mesh_t> = is_gf_v<G, void>;
 
   /// ---------------------------  tags for some implementation details  ---------------------------------
+  // Should be refined...
+  template<typename G> 
+    concept GfContainer = is_gf_v<G>;
 
   struct impl_tag {};
   struct impl_tag2 {};

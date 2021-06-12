@@ -36,9 +36,8 @@ namespace triqs::gfs::details {
 
   // a simple test for the argument of G[...] to have an early error and short error message.
   template <typename Mesh, typename A> constexpr bool is_ok1() {
-    return std::is_same<typename Mesh::mesh_point_t, A>::value || std::is_constructible<long, A>::value || std::is_constructible<_long, A>::value
-       || std::is_same<A, all_t>::value || std::is_same<std::array<long, 3>, A>::value || std::is_same<matsubara_freq, A>::value;
-    // FIXME : all std::array. with NDA clean
+    return std::is_constructible_v<typename Mesh::mesh_point_t, A> ||  std::is_constructible_v<typename Mesh::index_t, A>  // std::is_constructible<long, A>::value || std::is_constructible<_long, A>::value
+       || std::is_same_v<A, all_t>; // || std::is_same<std::array<long, 3>, A>::value || std::is_same<matsubara_freq, A>::value;
   }
   template <typename Mesh, typename... A> struct is_ok { static constexpr bool value = is_ok1<Mesh, std::decay_t<A>...>(); };
   template <typename... T, typename... A> struct is_ok<mesh::prod<T...>, A...> {
@@ -64,6 +63,7 @@ namespace triqs::gfs::details {
 
       // FIXME : use a bit set and a constexpr function
       // Filter the meshes of g into a tuple containing only the ones corresponding to all_t arguments
+      // constexpr _ stD::array
       auto m_tuple = triqs::tuple::fold(filter_mesh{}, std::make_tuple(args...), g.mesh().components(), std::make_tuple());
       // slice the data
       auto arr2 = g.data()(args..., nda::ellipsis());
@@ -86,31 +86,35 @@ namespace triqs::gfs::details {
 
   //-----------------------------------------------
   //
-  template <typename M> FORCEINLINE auto get_linear_index_from_mesh_and_arg(M const &m, typename M::mesh_point_t const &x) {
+  template <typename M> FORCEINLINE auto get_linidx(M const &m, typename M::mesh_point_t const &x) {
     return x.linear_index();
   }
-  template <typename M> FORCEINLINE auto get_linear_index_from_mesh_and_arg(M const &m, typename M::index_t const &x) { return m.index_to_linear(x); }
-  template <typename M> FORCEINLINE range::all_t get_linear_index_from_mesh_and_arg(M &&, all_t) { return {}; }
+  template <typename M> FORCEINLINE auto get_linidx(M const &m, typename M::index_t const &x) { return m.index_to_linear(x); }
+  template <typename M> FORCEINLINE range::all_t get_linidx(M &&, all_t) { return {}; }
 
   //-----------------------------------------------
 
   //
   // Calls slice_or_access, but args cen be all_t, mesh_point, index_t
   //
-  template <size_t... Is, typename G, typename... Args>
-  decltype(auto) slice_or_access_general_impl(std::index_sequence<Is...>, G &g, Args const &... args) {
-    return slice_or_access(g, get_linear_index_from_mesh_and_arg(std::get<Is>(g.mesh()), args)...);
-  }
+/*  template <size_t... Is, typename G, typename... Args>*/
+  //decltype(auto) slice_or_access_general_impl(std::index_sequence<Is...>, G &g, Args const &...args) {
+    //return slice_or_access(g, get_linidx(std::get<Is>(g.mesh()), args)...);
+  /*}*/
   //-----------------------------------------------
 
-  template <typename G, typename... Args> decltype(auto) slice_or_access_general(G &g, Args const &... args) {
+  template <typename G, typename... Args> decltype(auto) slice_or_access_general(G &g, Args const &...args) {
 
     if constexpr (not(... or std::is_same_v<all_t, Args>))
       return g.on_mesh(args...);
     else {
       static_assert(sizeof...(Args) > 1, "Can not use all_t in a single gf"); // FIXME ? Generalize
-      return slice_or_access_general_impl(std::index_sequence_for<Args...>{}, g, args...);
-    }
-  }
+      // return slice_or_access_general_impl(std::index_sequence_for<Args...>{}, g, args...);
 
-} // namespace triqs::gfs::details
+      return [&]<auto... Is>(std::index_sequence<Is...>) mutable -> decltype(auto) {
+        return slice_or_access(g, get_linidx(std::get<Is>(g.mesh()), args)...);
+        }(std::index_sequence_for<Args...>{});
+      }
+    }
+
+  } // namespace triqs::gfs::details
