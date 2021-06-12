@@ -15,9 +15,9 @@
 //
 // Authors: Michel Ferrero, Olivier Parcollet, Nils Wentzell
 
-// common to many classes
-
-// ------------- All the call operators arguments -----------------------------
+// ************************************************
+//  operator ()
+// ************************************************
 
 template <typename... Args> decltype(auto) operator()(Args &&... args) const & {
   if constexpr (sizeof...(Args) == 0)
@@ -53,7 +53,9 @@ template <typename... Args> decltype(auto) operator()(Args &&... args) && {
   }
 }
 
-// ------------- All the [] operators without lazy arguments -----------------------------
+// ************************************************
+//  operator []
+// ************************************************
 
 private:
 #ifdef NDA_ENFORCE_BOUNDCHECK
@@ -61,6 +63,8 @@ static constexpr bool has_no_boundcheck = false;
 #else
 static constexpr bool has_no_boundcheck = true;
 #endif
+
+// ------------- helper  call_data  data[i] or data[tuple ...]
 
 // Self can not be a rvalue, since we return a view !
 // similar coding as for nda
@@ -70,24 +74,30 @@ template <typename Self> FORCEINLINE static decltype(auto) call_data(Self &&self
 
 template <typename Self, typename... T>
 FORCEINLINE static decltype(auto) call_data(Self &&self, std::tuple<T...> const &tu) noexcept(has_no_boundcheck) {
-  return [&]<auto... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+  return [&]<auto... Is>(std::index_sequence<Is...>)->decltype(auto) {
     return data_t::template call<(target_t::is_matrix ? 'M' : 'A'), false>(std::forward<Self>(self)._data, std::get<Is>(tu)..., ellipsis{});
   }
   (std::make_index_sequence<sizeof...(T)>{});
 }
 
 public:
+// ------------- g[ mesh_index_t]
+// transform the mesh_index_t into a linear_mesh_index_t and pass it to the data array
+// mesh_index_t can be a long, or a tuple, etc.. whatever the mesh says
 
-decltype(auto) operator[](mesh_index_t const &arg) {
-  EXPECTS(_mesh.is_within_boundary(arg));
-  return call_data(*this, _mesh.index_to_linear(arg));
+decltype(auto) operator[](mesh_index_t const &idx) {
+  EXPECTS(_mesh.is_within_boundary(idx));
+  return call_data(*this, _mesh.index_to_linear(idx));
 }
 
 // same code for const call
-decltype(auto) operator[](mesh_index_t const &arg) const{
-  EXPECTS(_mesh.is_within_boundary(arg));
-  return call_data(*this, _mesh.index_to_linear(arg));
+decltype(auto) operator[](mesh_index_t const &idx) const {
+  EXPECTS(_mesh.is_within_boundary(idx));
+  return call_data(*this, _mesh.index_to_linear(idx));
 }
+
+// ------------- g[ mesh_point_t]
+// transform the mesh_point_t into a linear_mesh_index_t and pass it to the data array
 
 // pass a mesh_point of the mesh
 decltype(auto) operator[](mesh_point_t const &x) {
@@ -104,60 +114,38 @@ decltype(auto) operator[](mesh_point_t const &x) const {
   return call_data(*this, x.linear_index());
 }
 
-private:
-using cp_worker = mesh::closest_point<Mesh, Target>;
-
-public:
+// ------------- g[ closest_mesh_pt(...) ]
 // pass an abtract closest_point. We extract the value of the domain from p, call the gf_closest_point trait
+
 template <typename... U> decltype(auto) operator[](closest_pt_wrap<U...> const &p) {
-  return call_data(*this, _mesh.index_to_linear(cp_worker::invoke(_mesh, p)));
+  return call_data(*this, _mesh.index_to_linear(mesh::closest_point<Mesh, Target>::invoke(_mesh, p)));
 }
 template <typename... U> decltype(auto) operator[](closest_pt_wrap<U...> const &p) const {
-  return call_data(*this, _mesh.index_to_linear(cp_worker::invoke(_mesh, p)));
+  return call_data(*this, _mesh.index_to_linear(mesh::closest_point<Mesh, Target>::invoke(_mesh, p)));
 }
 
-// -------------- operator [] with nda::clef::comma_tuple.
+// -------------- g[ nda::clef::comma_tuple] . Ersatz of [x,y,z,..]
+private:
+// the implementation is similar for the 3 calls, we factorize it as usual with the Self mechanism
+template <typename Self, typename... U> static decltype(auto) subscript_impl(Self &&self, nda::clef::comma_tuple<U...> const &tu) {
+  static_assert(sizeof...(U) == arity, "Incorrect number of argument in [] operator");
+  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
+    return clef::make_expr_subscript(std::forward<Self>(self), tu);
+  else
+    return [&]<auto... Is>(std::index_sequence<Is...>) mutable->decltype(auto) {
+      return details::slice_or_access(std::forward<Self>(self),
+                                      details::get_linidx(std::get<Is>(std::forward<Self>(self).mesh()), std::get<Is>(tu._t))...);
+    }
+  (std::make_index_sequence<arity>{});
+}
+
 public:
-// split lazy case from the rest. Use next [] ?? but no arity check !??
-//https://godbolt.org/z/vT9fYEcbs
-// trait is_argument_compatible_with _/Mesn
-// one concept ---> it EXPLAINS the error
-template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) & {
-  static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
-    return clef::make_expr_subscript(*this, tu);
-  else {
-    static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
-    // in clear, splat the tuple
-    // return details::slice_or_access_general(*this, tu...);
-    auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return std::apply(l, tu._t);
-  }
-}
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) & { return subscript_impl(*this, tu); }
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) const & { return subscript_impl(*this, tu); }
+template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) && { return subscript_impl(std::move(*this), tu); }
 
-template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) const & {
-  static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
-    return clef::make_expr_subscript(*this, tu);
-  else {
-    static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
-    auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return std::apply(l, tu._t);
-  }
-}
-
-template <typename... U> decltype(auto) operator[](nda::clef::comma_tuple<U...> const &tu) && {
-  static_assert(sizeof...(U) == get_n_variables<Mesh>::value, "Incorrect number of argument in [] operator");
-  if constexpr ((... or clef::Lazy<U>)) // any argument is lazy ?
-    return clef::make_expr_subscript(std::move(*this), tu);
-  else {
-    static_assert(details::is_ok<mesh_t, U...>::value, "Argument type incorrect");
-    auto l = [this](auto &&... y) -> decltype(auto) { return details::slice_or_access_general(*this, y...); };
-    return std::apply(l, tu._t);
-  }
-}
-
-// ------------- [] with lazy arguments -----------------------------
+// ------------- g[lazy expression] -----------------------------
+// one argument only. The multiple argument is handled by the comma_tuple call above
 
 template <clef::Lazy Arg> auto operator[](Arg &&arg) const & { return clef::make_expr_subscript(*this, std::forward<Arg>(arg)); }
 template <clef::Lazy Arg> auto operator[](Arg &&arg) & { return clef::make_expr_subscript(*this, std::forward<Arg>(arg)); }
@@ -181,7 +169,9 @@ template <typename... Args> FORCEINLINE decltype(auto) on_mesh_from_linear_index
   return call_data(*this, linear_mesh_index_t(std::forward<Args>(args)...));
 }
 
-//----------------------------- HDF5 -----------------------------
+// ************************************************
+//       HDF5 
+// ************************************************
 
 /// HDF5 name
 static std::string hdf5_format() { return "Gf"; }
@@ -224,40 +214,33 @@ friend std::ostream &operator<<(std::ostream &out, this_t const &x) { return out
 
 //----------------------------- MPI  -----------------------------
 
-// mako <%def name="mpidoc(OP)">
 /**
-     * Initiate (lazy) MPI ${OP}
-     *
-     * When the returned object is used at the RHS of operator = or in a constructor of a gf,
-     * the MPI ${OP} operation is performed.
-     *
-     * @group MPI
-     * @param g The Green function
-     * @param c The MPI communicator (default is world)
-     * @param root The root of the broadcast communication in the MPI sense.
-     * @return Returns a lazy object describing the object and the MPI operation to be performed.
-     *
-     */
-// mako </%def>
-
-// mako ${mpidoc("Bcast")}
+* Initiate (lazy) MPI broadcast 
+*
+* When the returned object is used at the RHS of operator = or in a constructor of a gf,
+* the MPI  operation is performed.
+*
+* @group MPI
+* @param g The Green function
+* @param c The MPI communicator (default is world)
+* @param root The root of the broadcast communication in the MPI sense.
+* @return Returns a lazy object describing the object and the MPI operation to be performed.
+*
+*/
 friend void mpi_broadcast(this_t &g, mpi::communicator c = {}, int root = 0) {
   // Shall we bcast mesh ?
   mpi::broadcast(g.data(), c, root);
 }
 
-// mako ${mpidoc("Reduce")}
 friend mpi::lazy<mpi::tag::reduce, const_view_type> mpi_reduce(this_t const &a, mpi::communicator c = {}, int root = 0, bool all = false,
                                                                MPI_Op op = MPI_SUM) {
   return {a(), c, root, all, op};
 }
 
-// mako ${mpidoc("Scatter")}
 friend mpi::lazy<mpi::tag::scatter, const_view_type> mpi_scatter(this_t const &a, mpi::communicator c = {}, int root = 0) {
   return {a(), c, root, true};
 }
 
-// mako ${mpidoc("Gather")}
 friend mpi::lazy<mpi::tag::gather, const_view_type> mpi_gather(this_t const &a, mpi::communicator c = {}, int root = 0, bool all = false) {
   return {a(), c, root, all};
 }

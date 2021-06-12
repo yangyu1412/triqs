@@ -30,16 +30,13 @@ namespace triqs::mesh {
   // any type tagged with this will overload , operator and make a comma tuple
   template <typename T> inline constexpr bool overloads_comma_v = false;
 
-  template <> inline  constexpr bool overloads_comma_v<all_t>                   = true;
+  template <> inline constexpr bool overloads_comma_v<all_t>                   = true;
   template <> inline constexpr bool overloads_comma_v<matsubara_freq>          = true;
   template <typename M> inline constexpr bool overloads_comma_v<mesh_point<M>> = true;
 
   template <typename T, typename U>
   requires(overloads_comma_v<std::decay_t<T>> or overloads_comma_v<std::decay_t<U>>) //
      nda::clef::comma_tuple<std::decay_t<T>, std::decay_t<U>>
-     operator,(T &&x, U &&u) {
-    return {std::make_tuple(x, u)};
-    //return {x, u};
-  }
+  operator,(T &&x, U &&u) { return {std::make_tuple(x, u)}; }
 
-} // namespace nda::clef
+} // namespace triqs::mesh

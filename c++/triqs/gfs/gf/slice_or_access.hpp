@@ -24,97 +24,68 @@ namespace triqs::gfs::details {
 
   using nda::range;
 
-  // "Lambda" : X = argument, M = mesh, Tu = tuple of results
-  // Action : accumulate the m in tu iif X is a all_t
-  // To be used in partial_eval in a fold to filter the tuple of mesh
-  struct filter_mesh {
-    template <typename X, typename M, typename Tu> auto operator()(X const &x, M const &m, Tu &&tu) const { return std::forward<Tu>(tu); }
-    template <typename M, typename Tu> auto operator()(range::all_t, M const &m, Tu &&tu) const {
-      return std::tuple_cat(std::forward<Tu>(tu), std::tie(m));
-    }
-  };
-
-  // a simple test for the argument of G[...] to have an early error and short error message.
-  template <typename Mesh, typename A> constexpr bool is_ok1() {
-    return std::is_constructible_v<typename Mesh::mesh_point_t, A> ||  std::is_constructible_v<typename Mesh::index_t, A>  // std::is_constructible<long, A>::value || std::is_constructible<_long, A>::value
-       || std::is_same_v<A, all_t>; // || std::is_same<std::array<long, 3>, A>::value || std::is_same<matsubara_freq, A>::value;
-  }
-  template <typename Mesh, typename... A> struct is_ok { static constexpr bool value = is_ok1<Mesh, std::decay_t<A>...>(); };
-  template <typename... T, typename... A> struct is_ok<mesh::prod<T...>, A...> {
-    static constexpr bool value = (is_ok1<T, std::decay_t<A>>() and ...);
-  };
-
-  // -----------------------------------------
-  //           slice_or_access
-  //
-  //
+  //------------------   slice_or_access   -----------------------------
+  // implement g[...]
   // g : a gf, gf_view, gf_const_view container.
-  // args must be range::all_t or long (linear_indices of meshes)
-  // returns either g.data[args...] if args contains no  all_t
-  // or a new view if some args are all_t
+  // args : range::all_t or linear_indices of meshes
+  // returns
+  //   -  A sliced g      if at least one args is all_t
+  //   -  g.data[args...] otherwise
+  // The sliced g is such that :
+  //    - its data is the slice of the data array in the dimensions corresponding to all_t arguments
+  //    - its mesh is the (product) of the mesh(es) corresponding to all_t arguments.
   //
   template <typename G, typename... Args> decltype(auto) slice_or_access(G &g, Args const &... args) {
 
+    // arguments must be all_t or long
     static_assert(((std::is_same_v<range::all_t, Args> or std::is_same_v<long, Args>)and...), "Internal error : unexpected type in slice_or_access");
 
+    // if no argument is a all_t, it is simple : just all the data...
+    // FIXME : simplify this call ?
     if constexpr (not(std::is_same_v<range::all_t, Args> or ...))
       return g.on_mesh_from_linear_index(args...);
+
     else {
+      // at least one argument is an all_t
+      // prepare the new mesh, of size new_arity, made of all the meshes corresponding to all_t arguments.
+      static constexpr int new_arity = (std::is_base_of_v<range::all_t, Args> + ...);
 
-      // FIXME : use a bit set and a constexpr function
-      // Filter the meshes of g into a tuple containing only the ones corresponding to all_t arguments
-      // constexpr _ stD::array
-      auto m_tuple = triqs::tuple::fold(filter_mesh{}, std::make_tuple(args...), g.mesh().components(), std::make_tuple());
-      // slice the data
-      auto arr2 = g.data()(args..., nda::ellipsis());
+      // take an array of bool : true iif if the args if an all_t and
+      // compute as std::array which is the list of position of the meshes to be picked up to form the new mesh of the result
+      // ie the positions of the all_t in the args list
+      constexpr auto compute_pos_mesh_kept = [](std::array<bool, G::arity> const &args_is_allrange) {
+        std::array<int, new_arity> result = {};
+        for (int n = 0, p = 0; n < G::arity; ++n)
+          if (args_is_allrange[n]) result[p++] = n;
+        return result;
+      };
 
-      // Build the new mesh. If tuple size > 1 , it is a prod mesh, otherwise just extract the mesh from the tuple
-      auto mesh = [&m_tuple]() {
-        if constexpr (std::tuple_size_v<decltype(m_tuple)> == 1) {
-          return std::get<0>(m_tuple);
+      // an array of size new_arity with the positions of the meshes to pick up to build the new mesh
+      static constexpr std::array<int, new_arity> pos_mesh_kept =
+         compute_pos_mesh_kept(std::array<bool, G::arity>{std::is_base_of_v<range::all_t, Args>...});
+
+      auto make_new_mesh = [&g]() {
+        if constexpr (new_arity == 1) {
+          return std::get<pos_mesh_kept[0]>(g.mesh());
         } else {
-          return mesh::prod{m_tuple};
+          return [&g]<auto... Is>(std::index_sequence<Is...>) { return mesh::prod{std::get<pos_mesh_kept[Is]>...}; }
+          (std::make_index_sequence<new_arity>{});
         }
-      }();
-      using mesh_t = decltype(mesh);
+      };
+
+      // build the gf or view
+      using mesh_t = decltype(make_new_mesh());
       if constexpr (G::is_const or std::is_const<G>::value)
-        return gf_const_view<mesh_t, typename G::target_t>{std::move(mesh), arr2, g.indices()};
+        return gf_const_view<mesh_t, typename G::target_t>{make_new_mesh(), g.data()(args..., nda::ellipsis()), g.indices()};
       else
-        return gf_view<mesh_t, typename G::target_t>{std::move(mesh), arr2, g.indices()};
+        return gf_view<mesh_t, typename G::target_t>{make_new_mesh(), g.data()(args..., nda::ellipsis()), g.indices()};
     }
   }
 
-  //-----------------------------------------------
+  //------------------   get_linidx   -----------------------------
   //
-  template <typename M> FORCEINLINE auto get_linidx(M const &m, typename M::mesh_point_t const &x) {
-    return x.linear_index();
-  }
+  template <typename M> FORCEINLINE auto get_linidx(M const &m, typename M::mesh_point_t const &x) { return x.linear_index(); }
   template <typename M> FORCEINLINE auto get_linidx(M const &m, typename M::index_t const &x) { return m.index_to_linear(x); }
   template <typename M> FORCEINLINE range::all_t get_linidx(M &&, all_t) { return {}; }
 
-  //-----------------------------------------------
-
-  //
-  // Calls slice_or_access, but args cen be all_t, mesh_point, index_t
-  //
-/*  template <size_t... Is, typename G, typename... Args>*/
-  //decltype(auto) slice_or_access_general_impl(std::index_sequence<Is...>, G &g, Args const &...args) {
-    //return slice_or_access(g, get_linidx(std::get<Is>(g.mesh()), args)...);
-  /*}*/
-  //-----------------------------------------------
-
-  template <typename G, typename... Args> decltype(auto) slice_or_access_general(G &g, Args const &...args) {
-
-    if constexpr (not(... or std::is_same_v<all_t, Args>))
-      return g.on_mesh(args...);
-    else {
-      static_assert(sizeof...(Args) > 1, "Can not use all_t in a single gf"); // FIXME ? Generalize
-      // return slice_or_access_general_impl(std::index_sequence_for<Args...>{}, g, args...);
-
-      return [&]<auto... Is>(std::index_sequence<Is...>) mutable -> decltype(auto) {
-        return slice_or_access(g, get_linidx(std::get<Is>(g.mesh()), args)...);
-        }(std::index_sequence_for<Args...>{});
-      }
-    }
-
-  } // namespace triqs::gfs::details
+} // namespace triqs::gfs::details

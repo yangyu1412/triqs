@@ -60,7 +60,7 @@ namespace triqs::mesh {
 
   template <typename Target> struct closest_point<brzone, Target> {
 
-    template <typename T> static brzone::index_t invoke(brzone const &m, closest_pt_wrap<T> const &p) {
+  //  template <typename T> static brzone::index_t invoke(brzone const &m, closest_pt_wrap<T> const &p) {
 
       //// WRONG To be reimplemented
       //brzone::index_t result; // array<Int, 3>
@@ -71,7 +71,7 @@ namespace triqs::mesh {
       //result[u] = id.ia[i][u];
       //}
       //return result;
-    }
+    //}
   };
 
   //-------------------------------------------------------

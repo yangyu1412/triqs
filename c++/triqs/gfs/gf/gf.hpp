@@ -23,10 +23,9 @@
 namespace triqs::gfs {
 
   // forward
-  namespace details {
-    template <typename Mesh, typename... A> struct is_ok;
-    template <typename G, typename... Args> decltype(auto) slice_or_access_general(G &g, Args const &... args);
-  } // namespace details
+  //namespace details {
+    //template <typename G, typename... Args> decltype(auto) slice_or_access_general(G &g, Args const &... args);
+  //} // namespace details
 
   /*------------------------------------------------------------------------
    *   Forward Declaration of the main types : gf, gf_view, gf_const_view
@@ -36,6 +35,12 @@ namespace triqs::gfs {
   template <typename Mesh, typename Target = matrix_valued, typename Layout = nda::C_layout, typename EvalPolicy = default_evaluator> class gf;
   template <typename Mesh, typename Target = matrix_valued, typename Layout = nda::C_stride_layout, typename EvalPolicy = default_evaluator> class gf_view;
   template <typename Mesh, typename Target = matrix_valued, typename Layout = nda::C_stride_layout, typename EvalPolicy = default_evaluator> class gf_const_view;
+
+}
+// need the forward decl above
+#include "./slice_or_access.hpp"
+
+namespace triqs::gfs{
 
   /*----------------------------------------------------------
    *   Traits
