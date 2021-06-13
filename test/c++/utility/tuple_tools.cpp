@@ -46,10 +46,6 @@ std::string my_print_str(int x, int y) {
   return fs.str();
 }
 
-namespace triqs {
-  namespace tuple {}
-} // namespace triqs
-
 int main(int argc, char **argv) {
 
   auto t  = std::make_tuple(1, 2.3, 4.3, 8);
@@ -62,14 +58,9 @@ int main(int argc, char **argv) {
   }
 
   {
-    triqs::tuple::for_each(reverse(t), print_t());
-    std::cerr << std::endl;
-  }
-
-  {
-    auto res = triqs::tuple::apply(fun(), t);
-    std::cerr << " f(t) =" << res << std::endl;
-    if (std::abs((res - fun()(1, 2.3, 4.3, 8))) > 1.e-13) throw std::runtime_error(" ");
+    auto t = [x = 4]<auto... Is>(std::index_sequence<Is...>) { return std::make_tuple(((void)Is, x)...); }
+    (std::make_index_sequence<3>{});
+    if (t != std::make_tuple(4, 4, 4)) throw std::runtime_error(" ");
   }
 
   {
@@ -80,7 +71,12 @@ int main(int argc, char **argv) {
   std::cerr << "  ----- fold ----" << std::endl;
 
   {
-    auto res = triqs::tuple::fold([](double x, double r) { return x + r; }, t, 0);
+    auto res = triqs::tuple::fold(
+       [](double x, double r) {
+         std::cout << x << " " << r << std::endl;
+         return x + r;
+       },
+       t, 0);
     std::cerr << " " << res << std::endl;
     if (std::abs((res - 15.6)) > 1.e-13) throw std::runtime_error(" ");
   }
@@ -89,12 +85,6 @@ int main(int argc, char **argv) {
     auto res = triqs::tuple::fold([](double x, double y) { return x + 2 * y; }, t, 0);
     std::cerr << " " << res << std::endl;
     if (std::abs((res - 33.8)) > 1.e-13) throw std::runtime_error(" ");
-  }
-
-  {
-    auto res = triqs::tuple::fold([](double x, double y) { return x + 2 * y; }, reverse(t), 0);
-    std::cerr << " " << res << std::endl;
-    if (std::abs((res - 86.8)) > 1.e-13) throw std::runtime_error(" ");
   }
 
   {
@@ -109,45 +99,12 @@ int main(int argc, char **argv) {
       auto r = std::to_string(i);
       return s.empty() ? r : r + "_" + s;
     };
-#ifdef __cpp_generic_lambdas
     auto _name = [fl](auto... is) {
       auto t = std::make_tuple(is...);
       return triqs::tuple::fold(fl, t, std::string{});
     };
     auto r = _name(1, 2, 3);
-#else
-    auto r = triqs::tuple::fold(fl, reverse(std::make_tuple(1, 2, 3)), std::string{});
-#endif
     std::cerr << r << std::endl;
-  }
-
-  std::cerr << "  ----- apply ----" << std::endl;
-  {
-    auto res = triqs::tuple::apply(my_print_str, std::make_tuple(1, 2));
-    std::cerr << " " << res << std::endl;
-    res = triqs::tuple::apply(my_print_str, reverse(std::make_tuple(1, 2)));
-    std::cerr << " " << res << std::endl;
-  }
-
-  {
-    using namespace std::placeholders;
-    A a;
-    auto res = triqs::tuple::apply(std::bind(&A::str<int, int>, a, _1, _2), std::make_tuple(1, 2));
-    res      = triqs::tuple::apply(std::mem_fn(&A::str<int, int>), std::make_tuple(a, 1, 2));
-    std::cerr << " " << res << std::endl;
-  }
-
-  { // filter
-    std::cout << "  ----- filter ----" << std::endl;
-    auto t = std::make_tuple(0, 1, 2, 3, 4, "=5");
-    std::cout << "filter " << t << triqs::tuple::filter<0, 2, 3>(t) << std::endl;
-    std::cout << "filter " << t << triqs::tuple::filter<1, 3, 5>(t) << std::endl;
-
-    std::cout << "filter out " << t << triqs::tuple::filter_out<0, 2, 3>(t) << std::endl;
-    std::cout << "filter out " << t << triqs::tuple::filter_out<1, 3, 5>(t) << std::endl;
-
-    auto t2 = std::make_tuple(0, 1);
-    std::cout << "filter out " << t2 << triqs::tuple::filter_out<0>(t2) << std::endl;
   }
 
   { // replace

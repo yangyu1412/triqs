@@ -97,7 +97,8 @@ namespace cpp2py {
     static c_type py2c(PyObject *ob) {
       pyref x  = borrowed(ob);
       pyref ml = x.attr("_mlist");
-      return triqs::tuple::apply_construct<c_type>(mtuple_conv::py2c(ml));
+      //return triqs::tuple::apply_construct<c_type>(mtuple_conv::py2c(ml));
+      return std::make_from_tuple<c_type>(mtuple_conv::py2c(ml));
     }
   };
 

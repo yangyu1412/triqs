@@ -20,6 +20,7 @@
 
 #pragma once
 #include <variant>
+#include <tuple>
 #include <triqs/utility/first_include.hpp>
 #include <triqs/utility/tuple_tools.hpp>
 #include <triqs/operators/many_body_operator.hpp>
@@ -185,11 +186,10 @@ namespace triqs::operators::utils {
       return fs[indices];
     };
 
-    auto dims = make_tuple_repeat<std::tuple_size<typename DictType::key_type>::value>(fs.size());
-    auto mat  = apply_construct_parenthesis<matrix_t>(dims);
-    mat()     = ValueType{};
+    constexpr int N = std::tuple_size_v<typename DictType::key_type>;
+    auto mat= nda::zeros<ValueType>(nda::stdutil::make_initialized_array<N>(fs.size()));
 
-    for (auto const &kv : dict) triqs::tuple::apply(mat, map(indices_to_linear, kv.first)) = ValueType(kv.second);
+    for (auto const &kv : dict) std::apply(mat, map(indices_to_linear, kv.first)) = ValueType(kv.second);
 
     return mat;
   }
